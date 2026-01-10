@@ -1,23 +1,48 @@
-import express, { Express } from 'express';
-import { graphqlHTTP } from 'express-graphql';
-import { schema } from './graphql/schema';
-import { root } from './graphql/resolvers';
-import { setupRoutes } from './routes';
-import './config/database'; // Initialize database connection
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import { Database } from './config/Database';
+import { GraphQL } from './graphql/GraphQL';
+import { Routes } from './routes/Routes';
 
-const app: Express = express();
+export class App {
+  private app: express.Application;
+  private database: Database;
+  private graphql: GraphQL;
+  private routes: Routes;
 
-// GraphQL endpoint
-app.use(
-  '/graphql',
-  graphqlHTTP({
-    schema: schema,
-    rootValue: root,
-    graphiql: true, // Enable GraphiQL interface for testing
-  })
-);
+  constructor() {
+    this.app = express();
+    this.database = new Database();
+    this.graphql = new GraphQL(this.database);
+    this.routes = new Routes(this.database);
+    
+    this.setupMiddleware();
+    this.setupRoutes();
+  }
 
-// REST routes
-setupRoutes(app);
+  private setupMiddleware(): void {
+    // Global middleware
+    this.app.use(cors());
+    this.app.use(bodyParser.json());
+  }
 
-export default app;
+  async setupGraphQL(): Promise<void> {
+    await this.graphql.start();
+    // Apply Apollo Server middleware
+    // bodyParser.json() is already applied globally in setupMiddleware
+    this.app.use('/graphql', this.graphql.getMiddleware());
+  }
+
+  private setupRoutes(): void {
+    this.routes.setup(this.app);
+  }
+
+  getApp(): express.Application {
+    return this.app;
+  }
+
+  getDatabase(): Database {
+    return this.database;
+  }
+}

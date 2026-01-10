@@ -3,45 +3,60 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = process.env.DB_NAME || 'todest-graphql-db';
+export class Database {
+  private db: Db | null = null;
+  private client: MongoClient | null = null;
+  private uri: string;
+  private dbName: string;
 
-if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI is required in .env file');
-  process.exit(1);
-}
+  constructor() {
+    const MONGODB_URI = process.env.MONGODB_URI;
+    const DB_NAME = process.env.DB_NAME || 'todest-graphql-db';
 
-let db: Db | null = null;
+    if (!MONGODB_URI) {
+      console.error('❌ MONGODB_URI is required in .env file');
+      process.exit(1);
+    }
 
-// Connect to MongoDB Atlas
-MongoClient.connect(MONGODB_URI)
-  .then((client) => {
-    console.log('✅ Connected to MongoDB Atlas');
-    db = client.db(DB_NAME);
-    console.log(`📊 Using database: ${DB_NAME}`);
-    
-    // List existing collections on startup
-    db.listCollections()
-      .toArray()
-      .then((collections) => {
-        const collectionNames = collections.map(c => c.name);
-        console.log(`📁 Existing collections: ${collectionNames.join(', ') || 'none'}`);
-      })
-      .catch((err) => {
-        console.warn('⚠️  Could not list collections:', err.message);
-      });
-  })
-  .catch((error) => {
-    console.error('❌ MongoDB connection error:', error);
-    process.exit(1);
-  });
-
-export const getDb = (): Db => {
-  if (!db) {
-    throw new Error('Database not connected');
+    this.uri = MONGODB_URI;
+    this.dbName = DB_NAME;
   }
-  return db;
-};
 
-export { DB_NAME };
+  async connect(): Promise<void> {
+    try {
+      this.client = await MongoClient.connect(this.uri);
+      this.db = this.client.db(this.dbName);
+      
+      console.log('✅ Connected to MongoDB Atlas');
+      console.log(`📊 Using database: ${this.dbName}`);
+      
+      // List collections
+      const collections = await this.db.listCollections().toArray();
+      const names = collections.map(c => c.name);
+      console.log(`📁 Collections: ${names.join(', ') || 'none'}`);
+    } catch (error) {
+      console.error('❌ MongoDB connection error:', error);
+      process.exit(1);
+    }
+  }
+
+  getDb(): Db {
+    if (!this.db) {
+      throw new Error('Database not connected');
+    }
+    return this.db;
+  }
+
+  getDbName(): string {
+    return this.dbName;
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.client) {
+      await this.client.close();
+      this.db = null;
+      this.client = null;
+    }
+  }
+}
 
