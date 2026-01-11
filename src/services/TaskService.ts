@@ -9,12 +9,13 @@ export class TaskService {
     this.db = db;
   }
 
-  async createTask(input: CreateTaskInput): Promise<Task> {
+  async createTask(input: CreateTaskInput, userId: string): Promise<Task> {
     // Create task without _id (MongoDB will generate it)
     const taskData = {
       title: input.title,
       description: input.description || '',
       completed: false,
+      userId: userId, // Associate task with user
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -28,11 +29,12 @@ export class TaskService {
     };
   }
 
-  async deleteTask(id: string): Promise<boolean> {
+  async deleteTask(id: string, userId: string): Promise<boolean> {
     try {
+      // Only allow user to delete their own tasks
       const result = await this.db
         .collection(this.collectionName)
-        .deleteOne({ _id: new ObjectId(id) });
+        .deleteOne({ _id: new ObjectId(id), userId: userId });
       
       return result.deletedCount > 0;
     } catch (error) {
@@ -40,10 +42,13 @@ export class TaskService {
     }
   }
 
-  async getAllTasks(): Promise<Task[]> {
+  async getAllTasks(userId?: string): Promise<Task[]> {
+    // If userId provided, get only that user's tasks
+    const filter = userId ? { userId: userId } : {};
+    
     const tasks = await this.db
       .collection(this.collectionName)
-      .find({})
+      .find(filter)
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -52,6 +57,7 @@ export class TaskService {
       title: task.title,
       description: task.description || '',
       completed: task.completed,
+      userId: task.userId,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     }));
@@ -70,6 +76,7 @@ export class TaskService {
         title: task.title,
         description: task.description || '',
         completed: task.completed,
+        userId: task.userId,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       };
